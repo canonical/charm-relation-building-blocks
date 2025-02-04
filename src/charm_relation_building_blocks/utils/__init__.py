@@ -2,6 +2,6 @@
 # See LICENSE file for licensing details.
 """Reusable models for Juju relation data."""
 
-from .databagmodel import DatabagModel, DataValidationError
+from .relation_databag import dump_to_databag, load_from_databag
 
-__all__ = [DatabagModel, DataValidationError]
+__all__ = [dump_to_databag, load_from_databag]

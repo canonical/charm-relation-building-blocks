@@ -4,9 +4,11 @@
 
 from typing import List, Optional, Type, Union
 
+import pydantic
 from ops import BoundEvent, CharmBase, CharmEvents, EventBase, EventSource, Object
 
-from charm_relation_building_blocks.data_models import DatabagModel, DataValidationError
+from charm_relation_building_blocks.utils import load_from_databag
+from charm_relation_building_blocks.utils.relation_databag import dump_to_databag
 
 
 class DataChangedEvent(EventBase):
@@ -28,7 +30,7 @@ class Receiver(Object):
         self,
         charm: CharmBase,
         relation_name: str,
-        data_model: Type[DatabagModel],
+        data_model: Type[pydantic.BaseModel],
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ) -> None:
         """Initialize the Receiver object.
@@ -44,7 +46,7 @@ class Receiver(Object):
 
         self._charm = charm
         self._relation_name = relation_name
-        self._schema = data_model
+        self._data_model = data_model
 
         if not refresh_event:
             refresh_event = []
@@ -69,7 +71,7 @@ class Receiver(Object):
         """Return the relation instances for applications related to us on the monitored relation."""
         return self._charm.model.relations.get(self._relation_name, ())
 
-    def get_data(self) -> Optional[DatabagModel]:
+    def get_data(self) -> Optional[pydantic.BaseModel]:
         """Return data for at most one related application, raising if more than one is available.
 
         Useful for charms that always expect exactly one related application.  It is recommended that those charms also
@@ -90,9 +92,9 @@ class Receiver(Object):
         # Static analysis errors saying the keys may not be strings.  Protect against this by converting them.
         raw_data = {str(k): v for k, v in raw_data.items()}
 
-        return self._schema(**raw_data)
+        return load_from_databag(self._data_model, raw_data)
 
-    def get_data_from_all_relations(self) -> List[DatabagModel]:
+    def get_data_from_all_relations(self) -> List[pydantic.BaseModel]:
         """Return a list of data objects from all relations."""
         relations = self.get_relations()
         info_list = []
@@ -104,7 +106,7 @@ class Receiver(Object):
 
             # Static analysis errors saying the keys may not be strings.  Protect against this by converting them.
             data_dict = {str(k): v for k, v in data_dict.items()}
-            info_list.append(self._schema(**data_dict))
+            info_list.append(self._data_model(**data_dict))
         return info_list
 
 
@@ -114,7 +116,7 @@ class Sender(Object):
     def __init__(
         self,
         charm: CharmBase,
-        data: DatabagModel,
+        data: pydantic.BaseModel,
         relation_name: str,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ) -> None:
@@ -165,15 +167,15 @@ class Sender(Object):
         """
         info_relations = self._get_relations()
         for relation in info_relations:
-            self._data.dump(relation.data[self._charm.app])
+            dump_to_databag(self._data, relation.data[self._charm.app])
 
     def _is_relation_data_up_to_date(self):
         """Confirm that the Istio info data we should publish is published to all related applications."""
         expected_app_data = self._data
         for relation in self._get_relations():
             try:
-                app_data = self._data.__class__.load(relation.data[self._charm.app])
-            except DataValidationError:
+                app_data = load_from_databag(self._data.__class__, (relation.data[self._charm.app]))
+            except pydantic.ValidationError:
                 return False
             if app_data != expected_app_data:
                 return False

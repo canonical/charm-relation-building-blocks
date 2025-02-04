@@ -5,7 +5,6 @@ from ops import BoundEvent, CharmBase
 from ops.testing import Context
 from pydantic import BaseModel, Field
 
-from charm_relation_building_blocks.data_models import DatabagModel
 from charm_relation_building_blocks.relation_handlers import Receiver, Sender
 
 RELATION_NAME = "app-data-relation"
@@ -14,7 +13,7 @@ APP_DATA_KEY = "key"
 APP_DATA_VALUE = "value"
 
 
-class AppData(DatabagModel, BaseModel):
+class AppData(BaseModel):
     """Data model for the istio-info interface."""
 
     key: str = Field(
